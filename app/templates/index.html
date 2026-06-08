@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pipe Network Analysis · Nodal Head Correction Solver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="appbar">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="5" cy="6" r="2.2" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="19" cy="6" r="2.2" stroke="currentColor" stroke-width="1.6"/>
+      <circle cx="12" cy="18" r="2.2" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M7 7L17 7M6.2 8L11 16M17.8 8L13 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>Pipe Network Analysis</h1>
+      <p>Nodal Head Correction Method · Newton-Raphson solver</p>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="solver" role="tab">Solver</button>
+    <button class="tab" data-tab="guide" role="tab">How to use</button>
+    <button class="tab" data-tab="about" role="tab">About</button>
+  </nav>
+</header>
+
+<main id="main">
+  <!-- ===================== SOLVER TAB (dashboard) ===================== -->
+  <div id="tab-solver" class="tab-panel active" role="tabpanel">
+    <div class="dashboard">
+
+      <!-- ---------- INPUT COLUMN ---------- -->
+      <aside class="col-input">
+        <section class="card">
+          <div class="card-head">
+            <h2>Network input</h2>
+            <span class="muted-sm">edit, then solve</span>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">Preset
+              <select id="preset">
+                {% for key, label in presets.items() %}
+                <option value="{{ key }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+            <label class="field">Head-loss model
+              <select id="model">
+                <option value="H-W">Hazen-Williams</option>
+                <option value="D-W">Darcy-Weisbach</option>
+              </select>
+            </label>
+            <label class="field">Tolerance (m³/s)
+              <input id="tol" type="text" inputmode="decimal" value="1e-6">
+            </label>
+            <label class="field">Max iterations
+              <input id="maxiter" type="number" value="100" min="1">
+            </label>
+          </div>
+
+          <div class="subhead">
+            <h3>Nodes</h3>
+            <button class="btn-ghost add" data-target="nodes" type="button">+ node</button>
+          </div>
+          <div class="table-scroll">
+            <table id="nodes" class="grid-table">
+              <thead><tr><th>id</th><th>type</th><th>elev.</th><th>demand</th><th>fixed h</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="subhead">
+            <h3>Pipes</h3>
+            <button class="btn-ghost add" data-target="pipes" type="button">+ pipe</button>
+          </div>
+          <div class="table-scroll">
+            <table id="pipes" class="grid-table">
+              <thead><tr><th>id</th><th>from</th><th>to</th><th>length</th><th>dia.</th><th>rough.</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <p class="muted-sm hint">Roughness = Hazen-Williams C, or absolute ε (m) for Darcy-Weisbach.</p>
+
+          <button id="solve" class="btn-primary" type="button">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 5l11 7-11 7V5z" fill="currentColor"/></svg>
+            <span class="btn-label">Solve network</span>
+            <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="42 60"/></svg>
+          </button>
+          <p id="status" role="status" aria-live="polite"></p>
+        </section>
+      </aside>
+
+      <!-- ---------- RESULTS COLUMN ---------- -->
+      <section class="col-results">
+        <div id="results-empty" class="card empty hidden">
+          <p>Define a network and press <strong>Solve</strong> to see results.</p>
+        </div>
+
+        <div id="results">
+          <!-- KPI strip -->
+          <div class="kpi-row" id="kpis">
+            <div class="kpi"><span class="kpi-label">Status</span><span class="kpi-value" id="kpi-status">—</span></div>
+            <div class="kpi"><span class="kpi-label">Iterations</span><span class="kpi-value" id="kpi-iter">—</span></div>
+            <div class="kpi"><span class="kpi-label">Max residual (m³/s)</span><span class="kpi-value" id="kpi-res">—</span></div>
+            <div class="kpi"><span class="kpi-label">Solve time</span><span class="kpi-value" id="kpi-time">—</span></div>
+            <div class="kpi"><span class="kpi-label">Min pressure (m)</span><span class="kpi-value" id="kpi-pmin">—</span></div>
+            <div class="kpi"><span class="kpi-label">Max velocity (m/s)</span><span class="kpi-value" id="kpi-vmax">—</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Diagrams</h2></div>
+            <div class="figs">
+              <figure><img id="diagram" alt="Network diagram colour-coded by pressure head with pipe flows"><figcaption>Pressure heads (colour) and pipe flows</figcaption></figure>
+              <figure><img id="convergence" alt="Convergence of the maximum residual versus iteration"><figcaption>Convergence of the maximum residual</figcaption></figure>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Tables</h2></div>
+            <div class="result-tables">
+              <div>
+                <h3>Nodal results</h3>
+                <div class="table-scroll tall">
+                  <table id="node-results" class="grid-table num"><thead><tr><th>node</th><th>head (m)</th><th>pressure (m)</th></tr></thead><tbody></tbody></table>
+                </div>
+              </div>
+              <div>
+                <h3>Pipe results</h3>
+                <div class="table-scroll tall">
+                  <table id="pipe-results" class="grid-table num"><thead><tr><th>pipe</th><th>flow (L/s)</th><th>vel. (m/s)</th><th>h-loss (m)</th></tr></thead><tbody></tbody></table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="interpretation">
+            <div class="card-head">
+              <h2>Interpretation</h2>
+              <span class="muted-sm">automatic, from the solved values</span>
+            </div>
+            <ul id="interp-list"></ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ===================== GUIDE TAB ===================== -->
+  <div id="tab-guide" class="tab-panel" role="tabpanel">
+    <article class="doc card">
+      <p class="lead">
+        This tool solves a water pipe network. You describe the network (reservoirs, junctions
+        and pipes), press <strong>Solve</strong>, and it returns the hydraulic head and pressure
+        at every junction, the flow, velocity and head loss in every pipe, and two diagrams. It
+        uses the Nodal Head Correction Method (Newton-Raphson), the same solver validated
+        against EPANET to within 0.001%.
+      </p>
+
+      <h3>Quick start</h3>
+      <ol>
+        <li>The <strong>Solver</strong> tab already has the Single-loop network loaded and solved,
+          so its results show what an answer looks like.</li>
+        <li>Pick another network from <strong>Preset</strong>, or edit the Nodes and Pipes
+          tables directly.</li>
+        <li>Click <strong>Solve network</strong>. Every output updates.</li>
+        <li>Use <strong>+ node</strong> / <strong>+ pipe</strong> to grow the network, or the
+          row delete button to remove an item.</li>
+      </ol>
+      <p><button class="btn-secondary goto-solver" type="button">Go to the Solver</button></p>
+
+      <h3>What each input means</h3>
+      <ul>
+        <li><strong>reservoir</strong>: a source with a fixed water level. Set its
+          <em>fixed head</em> (m). Every network needs at least one. Elevation and demand are
+          ignored.</li>
+        <li><strong>junction</strong>: a connection or delivery point. Set its <em>elevation</em>
+          (m) and <em>demand</em> (m³/s, positive for water drawn off). Leave fixed head blank;
+          the tool computes the head.</li>
+        <li><strong>pipe</strong>: connects two nodes. Set <em>length</em> (m),
+          <em>diameter</em> (m) and <em>roughness</em>. Flow direction is solved, not entered.</li>
+      </ul>
+
+      <h3>Solver options</h3>
+      <ul>
+        <li><strong>Head-loss model</strong>: Hazen-Williams (roughness = coefficient C,
+          typically 100-150) or Darcy-Weisbach (roughness = absolute ε in metres).</li>
+        <li><strong>Tolerance</strong>: how small the flow imbalance must get (default 1e-6
+          m³/s).</li>
+        <li><strong>Max iterations</strong>: a safety cap (default 100).</li>
+      </ul>
+
+      <h3>Reading the results</h3>
+      <ul>
+        <li>The <strong>KPI strip</strong> shows the headline numbers: convergence status,
+          iterations, residual, solve time, the lowest pressure and the fastest pipe.</li>
+        <li>The <strong>diagram</strong> colours junctions by pressure head and arrows show
+          solved flow direction.</li>
+        <li><strong>Head</strong> is total energy level; <strong>pressure head</strong> is head
+          minus elevation, the pressure available for service.</li>
+        <li>The <strong>Interpretation</strong> panel explains the result and flags low
+          pressures or fast pipes.</li>
+      </ul>
+    </article>
+  </div>
+
+  <!-- ===================== ABOUT TAB ===================== -->
+  <div id="tab-about" class="tab-panel" role="tabpanel">
+    <article class="doc card">
+      <p class="lead">
+        The Nodal Head Correction Method treats the hydraulic head at each junction as the
+        unknown and adjusts all heads together until water is conserved at every node.
+      </p>
+      <h3>How it works</h3>
+      <ol>
+        <li>Start every unknown junction head at the average reservoir level.</li>
+        <li>From the head difference across each pipe, compute its flow using the chosen
+          head-loss law.</li>
+        <li>At each junction, sum the inflows and subtract the demand; the leftover is the
+          continuity residual.</li>
+        <li>If the largest residual is below tolerance, stop. Otherwise build the Jacobian,
+          solve one sparse linear system for the head corrections, apply them, and repeat.</li>
+      </ol>
+      <p>Being a Newton-Raphson method, the error roughly squares each step near the solution,
+        so it converges in a handful of iterations regardless of network size. Pipe flow
+        direction falls out of the solution rather than being assumed.</p>
+      <h3>How it is validated</h3>
+      <p>Every network here was also solved in EPANET (the U.S. EPA reference engine) through
+        the WNTR Python package. Across networks from 4 to over 120 nodes the maximum difference
+        in head is about 0.001%, far below the 0.1% target. The small network was additionally
+        confirmed by an independent Hardy Cross hand calculation.</p>
+      <h3>Scope</h3>
+      <p>Steady-state analysis: constant demands, no transients, no minor losses, no pumps or
+        valves. Water is incompressible and flow fully turbulent through rigid, leak-free pipes,
+        with demand only at nodes.</p>
+      <p class="muted-sm ref">References: Rossman (2000); Todini &amp; Pilati (1988); Swamee
+        &amp; Jain (1976); Klise et al. (2017).</p>
+    </article>
+  </div>
+</main>
+
+<script>
+  window.INITIAL_NETWORK = {{ preset | tojson }};
+</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
