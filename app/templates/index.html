@@ -88,12 +88,14 @@
           </div>
           <p class="muted-sm hint">Roughness = Hazen-Williams C, or absolute ε (m) for Darcy-Weisbach.</p>
 
-          <button id="solve" class="btn-primary" type="button">
-            <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 5l11 7-11 7V5z" fill="currentColor"/></svg>
-            <span class="btn-label">Solve network</span>
-            <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="42 60"/></svg>
-          </button>
-          <p id="status" role="status" aria-live="polite"></p>
+          <div class="solve-bar">
+            <button id="solve" class="btn-primary" type="button">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 5l11 7-11 7V5z" fill="currentColor"/></svg>
+              <span class="btn-label">Solve network</span>
+              <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="42 60"/></svg>
+            </button>
+            <p id="status" role="status" aria-live="polite"></p>
+          </div>
         </section>
       </aside>
 

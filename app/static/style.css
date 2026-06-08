@@ -87,6 +87,14 @@ main { max-width: 1320px; margin: 0 auto; padding: clamp(16px, 3vw, 28px); }
 @media (max-width: 980px) { .dashboard { grid-template-columns: 1fr; } }
 
 .col-input { position: sticky; top: 84px; }
+/* On wide screens the input column is pinned; cap its height and let the card
+   scroll internally so the Solve action bar (below) is always reachable. */
+@media (min-width: 981px) {
+  .col-input > .card {
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+  }
+}
 @media (max-width: 980px) { .col-input { position: static; } }
 .col-results { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 
@@ -139,6 +147,22 @@ select { cursor: pointer; }
 
 /* result tables: right-align numeric cells */
 .grid-table.num td + td { text-align: right; }
+
+/* ---------------- Solve action bar (always-visible footer) ---------------- */
+.solve-bar {
+  margin: 16px -18px -18px;          /* bleed over the card's padding to the edges */
+  padding: 14px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.solve-bar .btn-primary { margin-top: 0; }
+.solve-bar #status { margin-bottom: 0; }
+/* On wide screens the input card scrolls internally, so pin the bar to its
+   bottom edge — the Solve button stays visible no matter the network size. */
+@media (min-width: 981px) {
+  .solve-bar { position: sticky; bottom: 0; z-index: 5; }
+}
 
 /* ---------------- Buttons ---------------- */
 .btn-primary {
