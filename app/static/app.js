@@ -96,8 +96,8 @@ function updateKpis(data) {
 // ---- solving ---------------------------------------------------------------
 async function solve() {
   const status = document.getElementById("status");
-  const btn = document.getElementById("solve");
-  btn.classList.add("loading"); btn.disabled = true;
+  const buttons = document.querySelectorAll(".js-solve");
+  buttons.forEach(b => { b.classList.add("loading"); b.disabled = true; });
   status.textContent = "Solving..."; status.className = "";
 
   let data;
@@ -109,10 +109,10 @@ async function solve() {
     data = await resp.json();
   } catch (e) {
     status.textContent = "Request error: " + e; status.className = "error";
-    btn.classList.remove("loading"); btn.disabled = false;
+    buttons.forEach(b => { b.classList.remove("loading"); b.disabled = false; });
     return;
   }
-  btn.classList.remove("loading"); btn.disabled = false;
+  buttons.forEach(b => { b.classList.remove("loading"); b.disabled = false; });
 
   if (!data.ok) {
     status.textContent = "Error: " + data.error;
@@ -193,6 +193,7 @@ document.getElementById("preset").onchange = async (e) => {
   if (d.ok) loadNetwork(d.network);
 };
 document.getElementById("solve").onclick = solve;
+document.getElementById("solve-top").onclick = () => { showTab("solver"); solve(); };
 document.querySelectorAll(".tab").forEach(t => { t.onclick = () => showTab(t.dataset.tab); });
 document.querySelectorAll(".goto-solver").forEach(el =>
   el.addEventListener("click", () => showTab("solver")));

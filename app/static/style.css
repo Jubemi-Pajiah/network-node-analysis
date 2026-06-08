@@ -59,7 +59,11 @@ h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 .brand p { margin: 1px 0 0; font-size: 0.78rem; color: var(--muted); }
 
 /* ---------------- Tabs ---------------- */
+.appbar-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tabs { display: flex; gap: 4px; }
+/* compact Solve button living in the app bar (full-width primary overridden) */
+.btn-solve-top { width: auto; margin-top: 0; min-height: 40px; padding: 0 16px; font-size: 0.9rem; }
+.btn-solve-top .ico { width: 16px; height: 16px; }
 .tab {
   appearance: none; background: transparent; border: none;
   font: inherit; font-weight: 600; font-size: 0.9rem; color: var(--muted);
