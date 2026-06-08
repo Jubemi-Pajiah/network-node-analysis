@@ -23,18 +23,11 @@
       <p>Nodal Head Correction Method · Newton-Raphson solver</p>
     </div>
   </div>
-  <div class="appbar-actions">
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="solver" role="tab">Solver</button>
-      <button class="tab" data-tab="guide" role="tab">How to use</button>
-      <button class="tab" data-tab="about" role="tab">About</button>
-    </nav>
-    <button id="solve-top" class="btn-primary btn-solve-top js-solve" type="button">
-      <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 5l11 7-11 7V5z" fill="currentColor"/></svg>
-      <span class="btn-label">Solve</span>
-      <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="42 60"/></svg>
-    </button>
-  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="solver" role="tab">Solver</button>
+    <button class="tab" data-tab="guide" role="tab">How to use</button>
+    <button class="tab" data-tab="about" role="tab">About</button>
+  </nav>
 </header>
 
 <main id="main">
@@ -96,7 +89,7 @@
           <p class="muted-sm hint">Roughness = Hazen-Williams C, or absolute ε (m) for Darcy-Weisbach.</p>
 
           <div class="solve-bar">
-            <button id="solve" class="btn-primary js-solve" type="button">
+            <button id="solve" class="btn-primary" type="button">
               <svg class="ico" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 5l11 7-11 7V5z" fill="currentColor"/></svg>
               <span class="btn-label">Solve network</span>
               <svg class="spinner" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="42 60"/></svg>
