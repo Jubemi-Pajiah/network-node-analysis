@@ -1,4 +1,4 @@
-# Pipe Network Analysis — Nodal Head Correction Method
+# Pipe Network Analysis: Nodal Head Correction Method
 
 [![Live demo](https://img.shields.io/badge/demo-live-2563eb)](https://network-node-analysis.onrender.com/)
 ![Python](https://img.shields.io/badge/python-3.13-3776ab)
