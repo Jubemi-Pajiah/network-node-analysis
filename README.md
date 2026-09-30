@@ -129,3 +129,7 @@ To set it up manually, create a **Web Service** with build command
   Software, 95*, 420-431.
 - Swamee, P. K., & Jain, A. K. (1976). Explicit equations for pipe-flow
   problems. *Journal of the Hydraulics Division, 102*(5), 657-664.
+
+## License
+
+[MIT](LICENSE)
