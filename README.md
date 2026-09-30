@@ -1,7 +1,16 @@
 # Pipe Network Analysis — Nodal Head Correction Method
 
+[![Live demo](https://img.shields.io/badge/demo-live-2563eb)](https://network-node-analysis.onrender.com/)
+![Python](https://img.shields.io/badge/python-3.13-3776ab)
+![Flask](https://img.shields.io/badge/flask-3.1-000000)
+![Validated against EPANET](https://img.shields.io/badge/EPANET%20error-%3C0.004%25-16a34a)
+
 A steady-state water distribution network solver, validated against EPANET, with
 an interactive Flask web application.
+
+**Try it live: [network-node-analysis.onrender.com](https://network-node-analysis.onrender.com/)**
+(hosted on Render's free tier, so the first load can take up to a minute while
+the app wakes up).
 
 The solver treats the junction heads as the unknowns and solves nodal continuity
 by Newton-Raphson, assembling a sparse Jacobian and solving each step with
