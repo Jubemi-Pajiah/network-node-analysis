@@ -11,21 +11,33 @@ Run with:  python -m validation.hand_check
 
 from __future__ import annotations
 
-from solver import HW, loop_network, solve_network
-from solver.headloss import HW_N, hw_resistance
+from solver import DW, HW, loop_network, solve_network
+from solver.headloss import (dw_resistance_from_flow, hw_resistance,
+                             model_exponent)
 
 
-def hardy_cross_loop(tol: float = 1e-9, max_iter: int = 100):
+def hardy_cross_loop(tol: float = 1e-9, max_iter: int = 100,
+                        model: str = DW):
     """Solve the single loop J1-J2-J3 of the Single-loop network by Hardy Cross.
 
     Pipe flows are parameterised by the loop variable so continuity is satisfied
     exactly at every node throughout. The loop pipes are P2 (J1->J2),
     P4 (J2->J3) and P3 (J1->J3, traversed J3->J1 in the loop sense).
+
+    Both head-loss models are supported. Under Hazen-Williams the resistance of
+    each pipe is a constant; under Darcy-Weisbach it depends on the flow through
+    the friction factor, so it is recomputed from the current loop flows at every
+    correction, which is what a manual calculation would also do.
     """
-    net = loop_network()
+    net = loop_network(model=model)
     pipes = {p.id: p for p in net.pipes}
-    K = {pid: hw_resistance(p.length, p.diameter, p.roughness) for pid, p in pipes.items()}
-    n = HW_N
+    n = model_exponent(model)
+
+    def resistance(pid, q):
+        p = pipes[pid]
+        if model == HW:
+            return hw_resistance(p.length, p.diameter, p.roughness)
+        return dw_resistance_from_flow(p.length, p.diameter, p.roughness, q)
 
     # initial continuity-satisfying guess (m3/s)
     x = 0.04                 # P2 = J1 -> J2
@@ -41,8 +53,9 @@ def hardy_cross_loop(tol: float = 1e-9, max_iter: int = 100):
         den = 0.0   # sum of n*K*|Q|^(n-1)
         for pid, q, s in loop:
             qd = s * q       # flow in the loop direction
-            num += K[pid] * abs(qd) ** (n - 1) * qd
-            den += n * K[pid] * abs(qd) ** (n - 1)
+            kij = resistance(pid, qd)
+            num += kij * abs(qd) ** (n - 1) * qd
+            den += n * kij * abs(qd) ** (n - 1)
         dQ = -num / den
         x += dQ
         history.append(abs(dQ))
@@ -55,8 +68,8 @@ def hardy_cross_loop(tol: float = 1e-9, max_iter: int = 100):
 
 def main() -> int:
     hc_flows, iters, hist = hardy_cross_loop()
-    net = loop_network()
-    nr = solve_network(net, model=HW)
+    net = loop_network(model=DW)
+    nr = solve_network(net, model=DW)
 
     print("Independent Hardy Cross hand-check of the Single-loop network")
     print(f"  Hardy Cross converged in {iters} loop corrections "

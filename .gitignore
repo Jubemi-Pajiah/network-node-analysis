@@ -6,7 +6,8 @@ __pycache__/
 venv/
 env/
 
-# EPANET / WNTR scratch files
+# EPANET / WNTR scratch files and other throwaway output
+scratch/
 temp.bin
 temp.inp
 temp.rpt
@@ -19,3 +20,5 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Local assistant notes
+CLAUDE.md

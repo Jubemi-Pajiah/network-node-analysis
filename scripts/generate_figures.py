@@ -1,6 +1,6 @@
-"""Generate the static figures from real solver output.
+"""Generate the static figures in figures/ from real solver output.
 
-Run with:  python -m figures.generate_figures
+Run with:  python -m scripts.generate_figures
 
 Produces, in the figures/ directory:
   * one schematic diagram per network (nodes colour-coded by pressure head,
@@ -13,13 +13,18 @@ Produces, in the figures/ directory:
 from __future__ import annotations
 
 import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
 from analysis import compute_all
 from plotting import (plot_convergence, plot_network, plot_scalability,
                       plot_validation_bars)
-from solver import loop_network, large_network, medium_network, solve_network
+from solver import (DW, loop_network, large_network, medium_network,
+                    solve_network)
 
-FIG_DIR = os.path.dirname(__file__)
+FIG_DIR = os.path.join(ROOT, "figures")
 
 # fixed mapping from network key to builder and figure file stem
 NETWORKS = [
@@ -47,8 +52,8 @@ def main() -> int:
     # Figure type 1: schematic diagram per network
     series = []
     for name, build, stem in NETWORKS:
-        net = build()
-        res = solve_network(net)
+        net = build(model=DW)
+        res = solve_network(net, model=DW)
         fig = plot_network(net, res, title=f"{name}: pressure heads and pipe flows")
         _save(fig, f"fig_{stem}_schematic.png")
         series.append((name, res.residual_history))

@@ -1,7 +1,7 @@
 """Network data structures for the nodal head correction solver.
 
 This module defines the node and pipe data structures used throughout the
-project. The same structures feed the solver , the validation scripts and the
+project. The same structures feed the solver, the validation scripts and the
 Flask web application, so there is exactly one network representation in the
 codebase.
 

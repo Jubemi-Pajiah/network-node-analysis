@@ -1,8 +1,8 @@
-"""Shared plotting code for the project figures and the web application.
+"""Shared plotting code for the static figures and the web application.
 
-These functions are used both by figures/generate_figures.py and by the Flask
-app, so the diagrams shown in the browser are produced
-by exactly the same code as the static figures.
+These functions are used both by scripts/generate_figures.py and by the Flask
+app, so the diagrams shown in the browser are produced by exactly the same code
+as the figures in figures/.
 """
 
 from __future__ import annotations

@@ -29,9 +29,10 @@ DW = "D-W"   # Darcy-Weisbach
 
 # Hazen-Williams exponent and SI resistance constant.
 # The constant 10.667 and diameter exponent 4.871 are the precise SI values
-# used by the EPANET hydraulic engine; textbooks commonly quote the
-# rounded forms 10.67 and 4.87. The precise values are used here so that the
-# solver and EPANET solve an identical head-loss relationship.
+# used by the EPANET hydraulic engine; textbooks commonly quote the rounded
+# forms 10.67 and 4.87. The precise values are used here so that the
+# solver and EPANET solve an identical head-loss relationship. Hazen-Williams
+# is retained for reference only; all reported results use Darcy-Weisbach.
 HW_N = 1.852
 HW_CONST = 10.667
 HW_D_EXP = 4.871
@@ -44,21 +45,59 @@ def hw_resistance(length: float, diameter: float, C: float) -> float:
     return HW_CONST * length / (C ** HW_N * diameter ** HW_D_EXP)
 
 
-def swamee_jain_f(reynolds: float, rel_roughness: float) -> float:
-    """Darcy friction factor from the Swamee-Jain (1976) explicit formula.
+RE_LAMINAR = 2000.0    # upper limit of the laminar regime
+RE_TURBULENT = 4000.0  # lower limit of the fully developed turbulent regime
+
+
+def _sj(reynolds: float, rel_roughness: float) -> float:
+    """Swamee-Jain (1976) explicit approximation of Colebrook-White.
 
     f = 0.25 / [log10( eps/(3.7 D) + 5.74 / Re^0.9 )]^2
+    """
+    denom = math.log10(rel_roughness / 3.7 + 5.74 / reynolds ** 0.9)
+    return 0.25 / (denom * denom)
 
-    valid for 5000 <= Re <= 1e8 and 1e-6 <= eps/D <= 1e-2. For low Reynolds
-    numbers the laminar value 64/Re is used so the solver stays well behaved
-    while flows develop during the early iterations.
+
+def _dsj_dre(reynolds: float, rel_roughness: float) -> float:
+    """Derivative of _sj with respect to Reynolds number."""
+    a = rel_roughness / 3.7 + 5.74 / reynolds ** 0.9
+    da = -0.9 * 5.74 / reynolds ** 1.9
+    log_a = math.log10(a)
+    return -0.5 * da / (a * math.log(10.0) * log_a ** 3)
+
+
+def swamee_jain_f(reynolds: float, rel_roughness: float) -> float:
+    """Darcy friction factor across all three flow regimes.
+
+    Laminar (Re <= 2000):     f = 64 / Re  (Hagen-Poiseuille)
+    Turbulent (Re >= 4000):   Swamee-Jain (1976), valid to Re = 1e8
+    Transitional (2000-4000): smooth interpolation between the two
+
+    The blend matters. The laminar and Swamee-Jain branches disagree sharply
+    where they meet - at Re = 2000 they give 0.032 and about 0.050 - so
+    switching directly between them makes f discontinuous. A pipe carrying
+    little flow then sits astride the jump and its friction factor alternates
+    between branches from one iteration to the next, which stalls convergence.
+    Interpolating smoothly across the critical zone keeps f continuous in the
+    flow, in the same spirit as the transitional treatment used by EPANET
+    (Rossman, 2000).
     """
     if reynolds < 1e-8:
         return 0.0
-    if reynolds < 2000.0:
+    if reynolds <= RE_LAMINAR:
         return 64.0 / reynolds
-    denom = math.log10(rel_roughness / 3.7 + 5.74 / reynolds ** 0.9)
-    return 0.25 / (denom * denom)
+    if reynolds >= RE_TURBULENT:
+        return _sj(reynolds, rel_roughness)
+
+    t = (reynolds - RE_LAMINAR) / (RE_TURBULENT - RE_LAMINAR)
+    f_lam = 64.0 / RE_LAMINAR
+    f_turb = _sj(RE_TURBULENT, rel_roughness)
+    # Smoothstep rather than a slope-matched Hermite: carrying the steep
+    # laminar slope into the blend drives f below both endpoint values in the
+    # middle of the critical zone, which is not physical. Zero end slopes keep
+    # the interpolation monotone between the two branches.
+    blend = t * t * (3.0 - 2.0 * t)
+    return f_lam + (f_turb - f_lam) * blend
 
 
 def dw_resistance(length: float, diameter: float, friction_factor: float) -> float:

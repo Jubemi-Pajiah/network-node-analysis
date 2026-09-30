@@ -1,15 +1,13 @@
 """Nodal head correction solver (Newton-Raphson).
 
-This module implements the complete Step 1 to Step 9 algorithm.
-The unknowns are the junction heads H. For each pipe the flow
-is recovered from the head difference; nodal continuity
-gives the residual vector F(H); the sparse Jacobian J = dF/dH
-is assembled and the linear system J dH = -F is solved
+The unknowns are the junction heads H. For each pipe the flow is recovered
+from the head difference; nodal continuity gives the residual vector F(H); the
+sparse Jacobian J = dF/dH is assembled and the linear system J dH = -F is solved
 with scipy.sparse.linalg.spsolve (SuperLU). Heads are updated until the maximum
 absolute continuity residual falls below the tolerance.
 
-This is the single solver used both to produce the validation results and
-by the Flask web application.
+This is the single solver used both by the analysis/validation scripts and by
+the Flask web application.
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ from .headloss import (
     DW, HW, G, NU_WATER, dw_resistance_from_flow, hw_resistance,
     model_exponent,
 )
-from .network import Network
+from .network import Network, NetworkError
 
 # Numerical floor on |H_i - H_j| used only inside derivative evaluation, so the
 # Jacobian stays finite when a pipe carries near-zero flow during early
@@ -62,6 +60,13 @@ class SolveResult:
                 f"m3/s, solve time={self.solve_time*1000:.2f} ms")
 
 
+# Inner iteration that makes the Darcy-Weisbach friction factor consistent
+# with the flow it produces. Convergence is geometric and takes a handful of
+# passes; the cap only guards against a pathological pipe.
+_DW_INNER_MAX = 25
+_DW_INNER_TOL = 1e-12
+
+
 def _pipe_resistance(pipe, model: str, flow: float) -> float:
     if model == HW:
         return hw_resistance(pipe.length, pipe.diameter, pipe.roughness)
@@ -70,7 +75,33 @@ def _pipe_resistance(pipe, model: str, flow: float) -> float:
     raise ValueError(f"unknown head-loss model '{model}'")
 
 
-def solve_network(network: Network, model: str = HW, tol: float = 1e-6,
+
+def _check_roughness_units(network: Network, model: str) -> None:
+    """Reject a network whose roughness does not belong to the chosen model.
+
+    Pipe.roughness carries the Hazen-Williams coefficient C under H-W and the
+    absolute roughness epsilon in metres under D-W. The two differ by six orders
+    of magnitude, so feeding one to the other produces a resistance that is
+    wrong by a similar factor - and the solver still converges, to a confident
+    and meaningless answer. Checking the magnitude turns that silent failure
+    into an error at the point of use.
+    """
+    for pipe in network.pipes:
+        if model == HW and pipe.roughness < 1.0:
+            raise NetworkError(
+                f"pipe {pipe.id} has roughness {pipe.roughness:g}, which looks "
+                f"like a Darcy-Weisbach absolute roughness in metres, but the "
+                f"Hazen-Williams model was requested (C is typically 80-150). "
+                f"Build the network with model='{HW}' to get matching roughness.")
+        if model == DW and pipe.roughness > 1.0:
+            raise NetworkError(
+                f"pipe {pipe.id} has roughness {pipe.roughness:g}, which looks "
+                f"like a Hazen-Williams coefficient, but the Darcy-Weisbach "
+                f"model was requested (epsilon is of order 1e-4 m). Build the "
+                f"network with model='{DW}' to get matching roughness.")
+
+
+def solve_network(network: Network, model: str = DW, tol: float = 1e-6,
                   max_iter: int = 100) -> SolveResult:
     """Solve a pipe network by the nodal head correction method.
 
@@ -80,7 +111,10 @@ def solve_network(network: Network, model: str = HW, tol: float = 1e-6,
         The network to solve. It is validated first; a NetworkError is raised
         for malformed input (no reservoir, disconnected node, bad geometry).
     model : str
-        "H-W" for Hazen-Williams or "D-W" for Darcy-Weisbach.
+        "D-W" for Darcy-Weisbach (the default, and the model of record for this
+        study) or "H-W" for Hazen-Williams. The default matches the one used by
+        the network builders in solver.networks, because Pipe.roughness means
+        different things under the two models and the two defaults must agree.
     tol : float
         Convergence tolerance on the maximum absolute continuity residual
         (m3/s). Default 1e-6.
@@ -88,6 +122,7 @@ def solve_network(network: Network, model: str = HW, tol: float = 1e-6,
         Maximum number of iterations. Default 100.
     """
     network.validate()
+    _check_roughness_units(network, model)
     n = model_exponent(model)
 
     # ---- index the unknown (junction) nodes ------------------------------------
@@ -117,10 +152,28 @@ def solve_network(network: Network, model: str = HW, tol: float = 1e-6,
         # Step 2: pipe flows from current heads
         K: Dict[str, float] = {}
         for pipe in network.pipes:
-            kij = _pipe_resistance(pipe, model, flow[pipe.id])
-            K[pipe.id] = kij
             dh = head[pipe.start] - head[pipe.end]
+            q = flow[pipe.id]
+            kij = _pipe_resistance(pipe, model, q)
+
+            if model == DW:
+                # Under Darcy-Weisbach the resistance depends on the flow it is
+                # used to compute, through the friction factor. Taking K from
+                # the previous outer iteration leaves the two one step out of
+                # step, and the continuity residual then zig-zags instead of
+                # settling. Resolving the scalar relation dh = K(Q)|Q|Q for each
+                # pipe first makes Q and f mutually consistent, so the outer
+                # Newton iteration acts on a properly defined function of head.
+                for _ in range(_DW_INNER_MAX):
+                    q_next = math.copysign((abs(dh) / kij) ** (1.0 / n), dh)
+                    converged_inner = abs(q_next - q) <= _DW_INNER_TOL * max(abs(q_next), 1e-12)
+                    q = q_next
+                    if converged_inner:
+                        break
+                    kij = _pipe_resistance(pipe, model, q)
+
             q = math.copysign((abs(dh) / kij) ** (1.0 / n), dh)
+            K[pipe.id] = kij
             flow[pipe.id] = q
 
         # Step 3: continuity residual at each unknown node
@@ -147,7 +200,7 @@ def solve_network(network: Network, model: str = HW, tol: float = 1e-6,
             dh = head[pipe.start] - head[pipe.end]
             dh_eff = max(abs(dh), _DH_FLOOR)
             kij = K[pipe.id]
-            # g = dQ/d(dH) = (1/(n K)) |Q|^(1-n) >= 0
+            # g = dQ/d(dH) = (1/(n K)) |Q|^(1-n) >= 0 
             g = (1.0 / (n * kij)) * (dh_eff / kij) ** ((1.0 - n) / n)
             a, b = pipe.start, pipe.end
             a_unknown = a in idx

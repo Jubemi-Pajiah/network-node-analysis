@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from flask import Flask, jsonify, render_template, request  # noqa: E402
 
 from plotting import fig_to_base64_png, plot_convergence, plot_network  # noqa: E402
-from solver import (HW, NetworkError, loop_network, get_network,  # noqa: E402
+from solver import (DW, HW, NetworkError, loop_network, get_network,  # noqa: E402
                     interpret, network_from_payload, network_to_payload,
                     solve_network)
 
@@ -42,9 +42,17 @@ def index():
 
 @app.route("/preset/<key>")
 def preset(key: str):
-    """Return one of the three test networks as JSON for the editor."""
+    """Return one of the three test networks as JSON for the editor.
+
+    The roughness column means different things under the two head-loss models
+    (Hazen-Williams C, or absolute roughness in metres), so the preset is built
+    for whichever model the caller is about to solve with.
+    """
+    model = request.args.get("model", DW)
+    if model not in (HW, DW):
+        return jsonify({"ok": False, "error": f"unknown head-loss model '{model}'"}), 400
     try:
-        net = get_network(key)
+        net = get_network(key, model=model)
     except KeyError:
         return jsonify({"ok": False, "error": f"unknown preset '{key}'"}), 404
     return jsonify({"ok": True, "network": network_to_payload(net)})
@@ -58,8 +66,8 @@ def solve():
         return jsonify({"ok": False, "error": "request body must be valid JSON"}), 400
 
     # parse optional solver controls
-    model = data.get("model", HW)
-    if model not in (HW, "D-W"):
+    model = data.get("model", DW)
+    if model not in (HW, DW):
         return jsonify({"ok": False, "error": f"unknown head-loss model '{model}'"}), 400
     try:
         tol = float(data.get("tol", 1e-6))

@@ -3,8 +3,8 @@
 Runs the solver and EPANET on all three networks, builds every comparison
 table, measures computational performance, and caches the complete set of
 numbers to results/results.json. The validation script and the figure
-generator both read from this single source so
-that every reported number traces to real solver or EPANET output.
+generator both read from this single source so that every reported number
+traces to real solver or EPANET output.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from typing import Dict, List
 
 import numpy as np
 
-from solver import (HW, loop_network, large_network, medium_network,
+from solver import (DW, HW, loop_network, large_network, medium_network,
                     solve_network)
-from solver.networks import _grid_network
+from solver.networks import EPSILON_CAST_IRON, _grid_network
 from validation.epanet_bridge import run_epanet
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
@@ -31,7 +31,7 @@ NETWORK_BUILDERS = [
 ]
 
 
-def _timed_solve(build, model: str = HW, repeats: int = 5):
+def _timed_solve(build, model: str = DW, repeats: int = 5):
     """Solve repeatedly and keep the run with the median wall-clock time."""
     runs = []
     for _ in range(repeats):
@@ -86,10 +86,10 @@ def _compare(network, result, epanet_heads, epanet_flows) -> Dict:
     }
 
 
-def _network_payload(name: str, build) -> Dict:
-    net = build()
-    result = _timed_solve(build)
-    eh, ef = run_epanet(net)
+def _network_payload(name: str, build, model: str = DW) -> Dict:
+    net = build(model=model)
+    result = _timed_solve(lambda: build(model=model), model=model)
+    eh, ef = run_epanet(net, model=model)
     comparison = _compare(net, result, eh, ef)
 
     nodes = []
@@ -128,15 +128,16 @@ def _network_payload(name: str, build) -> Dict:
     }
 
 
-def _scalability(repeats: int = 5) -> List[Dict]:
+def _scalability(repeats: int = 5, model: str = DW) -> List[Dict]:
     """Solve a family of grids of increasing size and time each."""
     sizes = [(2, 2), (3, 3), (4, 4), (5, 5), (7, 7), (9, 9), (11, 11),
              (14, 14), (17, 17), (20, 20)]
     rows: List[Dict] = []
     for r, c in sizes:
         def build(r=r, c=c):
-            return _grid_network(f"{r}x{c} grid", rows=r, cols=c, base_demand=0.004)
-        best = _timed_solve(build, repeats=repeats)
+            return _grid_network(f"{r}x{c} grid", rows=r, cols=c,
+                                 base_demand=0.004, model=model)
+        best = _timed_solve(build, model=model, repeats=repeats)
         net = build()
         rows.append({
             "rows": r, "cols": c,
@@ -147,16 +148,47 @@ def _scalability(repeats: int = 5) -> List[Dict]:
     return rows
 
 
-def compute_all(save: bool = True) -> Dict:
-    networks = [_network_payload(name, build) for name, build in NETWORK_BUILDERS]
+def _tolerance_study(model: str = DW) -> List[Dict]:
+    """Resolve Network 1 at a range of tolerances.
+
+    The accuracy achieved against EPANET is a property of the method at a chosen
+    stopping point, not of the formulation alone, so the headline error figure
+    is reported alongside the tolerance that produced it.
+    """
+    net = loop_network(model=model)
+    epanet_heads, _ = run_epanet(net, model=model)
+    rows: List[Dict] = []
+    for tol in (1e-4, 1e-6, 1e-8, 1e-10):
+        result = solve_network(loop_network(model=model), model=model, tol=tol)
+        dev = max(abs(result.heads[nid] - epanet_heads[nid])
+                  for nid, node in net.nodes.items() if not node.is_reservoir)
+        ref = max(abs(epanet_heads[nid])
+                  for nid, node in net.nodes.items() if not node.is_reservoir)
+        rows.append({
+            "tolerance": tol,
+            "iterations": result.iterations,
+            "final_residual": result.max_residual,
+            "max_head_dev": dev,
+            "max_head_pct_dev": dev / ref * 100.0 if ref else 0.0,
+            "converged": result.converged,
+        })
+    return rows
+
+
+def compute_all(save: bool = True, model: str = DW) -> Dict:
+    networks = [_network_payload(name, build, model=model)
+                for name, build in NETWORK_BUILDERS]
 
     overall_head = max(n["comparison"]["max_head_pct_err"] for n in networks)
     overall_flow = max(n["comparison"]["max_flow_pct_err"] for n in networks)
 
     payload = {
         "generated": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "model": model,
+        "epsilon": EPSILON_CAST_IRON,
         "networks": networks,
-        "scalability": _scalability(),
+        "scalability": _scalability(model=model),
+        "tolerance_study": _tolerance_study(model=model),
         "overall_max_head_pct_err": overall_head,
         "overall_max_flow_pct_err": overall_flow,
         "overall_max_pct_err": max(overall_head, overall_flow),

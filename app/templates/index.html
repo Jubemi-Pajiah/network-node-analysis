@@ -53,8 +53,8 @@
             </label>
             <label class="field">Head-loss model
               <select id="model">
+                <option value="D-W" selected>Darcy-Weisbach</option>
                 <option value="H-W">Hazen-Williams</option>
-                <option value="D-W">Darcy-Weisbach</option>
               </select>
             </label>
             <label class="field">Tolerance (m³/s)
@@ -162,7 +162,7 @@
         and pipes), press <strong>Solve</strong>, and it returns the hydraulic head and pressure
         at every junction, the flow, velocity and head loss in every pipe, and two diagrams. It
         uses the Nodal Head Correction Method (Newton-Raphson), the same solver validated
-        against EPANET to within 0.001%.
+        against EPANET to within 0.004%.
       </p>
 
       <h3>Quick start</h3>
@@ -191,7 +191,7 @@
 
       <h3>Solver options</h3>
       <ul>
-        <li><strong>Head-loss model</strong>: Hazen-Williams (roughness = coefficient C,
+        <li><strong>Head-loss model</strong>: Darcy-Weisbach (roughness = absolute roughness in metres) or Hazen-Williams (roughness = coefficient C,
           typically 100-150) or Darcy-Weisbach (roughness = absolute ε in metres).</li>
         <li><strong>Tolerance</strong>: how small the flow imbalance must get (default 1e-6
           m³/s).</li>
@@ -235,7 +235,7 @@
       <h3>How it is validated</h3>
       <p>Every network here was also solved in EPANET (the U.S. EPA reference engine) through
         the WNTR Python package. Across networks from 4 to over 120 nodes the maximum difference
-        in head is about 0.001%, far below the 0.1% target. The small network was additionally
+        in head is about 0.003%, far below the 0.1% target. The small network was additionally
         confirmed by an independent Hardy Cross hand calculation.</p>
       <h3>Scope</h3>
       <p>Steady-state analysis: constant demands, no transients, no minor losses, no pumps or

@@ -1,6 +1,6 @@
 """Pipe network analysis by the nodal head correction method.
 
-The single solver used for the validation results and by the Flask web
+The single solver used by the analysis/validation scripts and by the Flask web
 application. Import surface:
 
     from solver import solve_network, SolveResult, Network, Node, Pipe

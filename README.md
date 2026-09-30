@@ -1,82 +1,114 @@
-# Pipe Network Analysis Using the Nodal Head Correction Method
+# Pipe Network Analysis — Nodal Head Correction Method
 
-This repository contains the single shared solver, the validation
-against EPANET, the figures and tables, and an interactive web application, all built from one solver module.
+A steady-state water distribution network solver, validated against EPANET, with
+an interactive Flask web application.
 
-The nodal head correction method is solved by Newton-Raphson with a sparse
-Jacobian and `scipy.sparse.linalg.spsolve` (SuperLU).
+The solver treats the junction heads as the unknowns and solves nodal continuity
+by Newton-Raphson, assembling a sparse Jacobian and solving each step with
+`scipy.sparse.linalg.spsolve` (SuperLU). Head loss can be modelled by
+Darcy-Weisbach (friction factor from Swamee-Jain, recomputed every iteration) or
+Hazen-Williams. It converges in a handful of iterations regardless of network
+size, and pipe flow directions fall out of the solution rather than being assumed.
+
+![The web app solving the single-loop network](figures/screenshots/solver-single-loop.png)
+
+## Screenshots
+
+| Medium grid network (26 nodes) | Automatic interpretation (122-node grid) |
+|---|---|
+| ![Medium grid network solved in the web app](figures/screenshots/solver-medium-grid.png) | ![Plain-language interpretation of the large grid results](figures/screenshots/interpretation-large-grid.png) |
+
+| How to use | About |
+|---|---|
+| ![Built-in usage guide](figures/screenshots/how-to-use.png) | ![How the method works and how it is validated](figures/screenshots/about.png) |
+
+## Highlights
+
+- **One solver, used everywhere.** The validation scripts, the figures and the web
+  app all import the same `solver/` package. None of them re-implements the algorithm.
+- **Validated against EPANET.** Every test network is rebuilt in EPANET through
+  [WNTR](https://github.com/USEPA/WNTR) and compared node by node and pipe by pipe.
+  The maximum head error across all networks is about **0.003%**, well under a
+  0.1% acceptance target.
+- **Independent hand check.** The small network is also solved by the classic
+  Hardy Cross loop method; the two methods agree to within 0.0002 L/s.
+- **Scales.** Tested on networks from 4 to 122 nodes (220 pipes).
+
+| Convergence | Validation vs EPANET |
+|---|---|
+| ![Convergence](figures/fig_convergence.png) | ![Validation](figures/fig_network2_validation.png) |
 
 ## Repository layout
 
 ```
-solver/                  the single solver (used by the scripts AND the web app)
+solver/                  the solver package
   network.py             Node, Pipe, Network data structures + validation
   headloss.py            Hazen-Williams and Darcy-Weisbach (Swamee-Jain) models
   core.py                the Newton-Raphson nodal head correction algorithm
   networks.py            the three test networks
+  interpret.py           plain-language interpretation of results
   serialize.py           JSON <-> Network conversion for the web app
-plotting.py              shared figure code (used by figures AND the web app)
+plotting.py              shared figure code (used by the scripts AND the web app)
 analysis.py              runs solver + EPANET on all networks, caches results.json
 validation/
   epanet_bridge.py       reproduces a network in EPANET via WNTR
   validate.py            prints comparison tables and the maximum % error
   hand_check.py          independent Hardy Cross check of the small network
-figures/generate_figures.py   generates all required PNG figures
+scripts/
+  generate_figures.py    regenerates the PNG figures in figures/
+  capture_app_figures.py captures real web-app output for the README
 app/                     Flask web application
+figures/                 generated PNG figures
 results/results.json     cached numerical results (regenerated on demand)
 ```
 
-## Quick start (local)
+Run every command from the repository root so that `solver/`, `analysis.py` and
+`plotting.py` are importable.
+
+## Quick start
 
 ```bash
 pip install -r requirements.txt
 
-# 1. validate the solver against EPANET (prints the maximum % error)
+# validate the solver against EPANET (prints the maximum % error)
 python -m validation.validate
 
-# 2. independent hand-check of the small network (Hardy Cross)
+# independent hand check of the small network (Hardy Cross)
 python -m validation.hand_check
 
-# 3. generate every figure (PNGs land in figures/)
-python -m figures.generate_figures
+# regenerate results and figures
+python analysis.py
+python -m scripts.generate_figures
 
-# 5. run the web application locally
+# run the web application
 python app/app.py            # then open http://127.0.0.1:5000
-# or, with the production server:
-gunicorn app.app:app         # Linux/macOS; serves on http://127.0.0.1:8000
+# or, with the production server (Linux/macOS):
+gunicorn app.app:app
 ```
 
-The web page loads pre-populated with the Single-loop network and solves it
-immediately. Edit any node or pipe value, choose a head-loss model, set the
-tolerance and iteration limit, then click **Solve network**; all outputs and
-both diagrams update. A preset selector loads the three test networks.
+The web page loads with the single-loop network already solved. Edit any node or
+pipe, choose a head-loss model, set the tolerance and iteration limit, and click
+**Solve network**; every table and both diagrams update. A preset selector loads
+the three test networks.
 
-## Deploying on Render (free web service)
+## Test networks
 
-This repository includes `render.yaml`, so Render can configure the service
-automatically (Blueprint). To deploy manually:
+| Network | Nodes | Pipes | Purpose |
+|---|---|---|---|
+| Single-loop | 4 | 4 | small enough to check by hand |
+| Medium grid | 26 | 40 | highly meshed multi-loop behaviour |
+| Large grid | 122 | 220 | performance and scalability |
 
-1. Push this repository to GitHub.
-2. In the Render dashboard choose **New > Web Service** and connect the repo.
-3. Set:
-   - **Environment:** Python 3
-   - **Build command:** `pip install -r requirements.txt`
-   - **Start command:** `gunicorn app.app:app`
-   - **Instance type:** Free
-4. Create the service. Render installs the dependencies and starts Gunicorn;
-   the public URL it assigns serves the application.
+## Scope
 
-Note: `gunicorn` is a Unix WSGI server and is used on Render (Linux). On
-Windows, run the app locally with `python app/app.py`.
+Steady-state analysis only: constant demands, no transients, no minor losses, no
+pumps or valves. Water is incompressible and pipes are rigid and leak-free.
 
-## How the pieces stay consistent
+## Deploying on Render
 
-There is exactly one solver (`solver/`). The figures, the validation
-and the web application all import it; none re-implements the
-algorithm. The figures shown in the browser are produced by the same
-`plotting.py` used for the static figures, and every number
-quoted here is read from `results/results.json`, which is
-produced directly by the solver and EPANET.
+`render.yaml` is included, so Render can configure the service as a Blueprint.
+To set it up manually, create a **Web Service** with build command
+`pip install -r requirements.txt` and start command `gunicorn app.app:app`.
 
 ## References
 

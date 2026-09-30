@@ -188,7 +188,8 @@ document.querySelectorAll("button.add").forEach(btn => {
   };
 });
 document.getElementById("preset").onchange = async (e) => {
-  const r = await fetch("/preset/" + e.target.value);
+  const model = document.getElementById("model").value;
+  const r = await fetch("/preset/" + e.target.value + "?model=" + encodeURIComponent(model));
   const d = await r.json();
   if (d.ok) loadNetwork(d.network);
 };
